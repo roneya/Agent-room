@@ -1,5 +1,7 @@
 # 🏠 RV Agent Room
 
+![RV Agent Room Preview](preview.png)
+
 A real-time pixel-art room that visualizes what your Claude Code agent is doing — live, as it happens. No extra tokens. No API calls. Pure hook magic.
 
 ---
@@ -174,6 +176,34 @@ The room has a built-in wall editor to block off areas so the character navigate
 - Press **`E`** again — exit edit mode
 
 Walls are saved to `agent_grid.json` via the local server and persist across sessions.
+
+---
+
+## How the GitHub Pages Version Works
+
+The project is hosted at **[https://roneya.github.io/Agent-room/](https://roneya.github.io/Agent-room/)**
+
+> ⚠️ GitHub Pages only hosts the UI. The live character movement still requires your local server running.
+
+Here's what's actually happening:
+
+```
+GitHub Pages ──serves──► your browser (the HTML/JS/assets)
+                              │
+                              └──fetches──► localhost:7788 (YOUR machine)
+                                               │
+                                         agent_server.py running locally
+```
+
+- **GitHub Pages** just delivers the HTML file — like a waiter bringing a menu
+- **Your browser** runs the code and calls `localhost:7788` for live data
+- **`localhost` always means your own machine**, regardless of what URL you opened
+
+So if you open the GitHub Pages link on your Mac while `agent_server.py` is running, the character moves in real time — because your browser is silently pulling data from your local server.
+
+If someone else opens the same link on their machine, they'll see the room frozen with an **offline** status — because their `localhost:7788` has nothing running.
+
+**This means:** GitHub Pages is your permanent UI host. Your local machine is the engine. On session start, `launch.sh` automatically opens the GitHub Pages URL in your browser and starts the local server in the background — so everything just works.
 
 ---
 
