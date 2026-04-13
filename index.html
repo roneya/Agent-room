@@ -1,0 +1,480 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>RV Agent Room</title>
+<link rel="icon" type="image/png" href="character/ic.png">
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body { overflow: hidden; width: 100vw; height: 100vh; background: #2c1a0e; }
+  #game { position: fixed; top: 0; left: 0; width: 100vw; height: 100vh; }
+  #bg { width: 100%; height: 100%; object-fit: contain; display: block; }
+  #character {
+    position: absolute; width: 96px; height: 96px;
+    image-rendering: pixelated; transform: translate(-50%, -50%);
+    pointer-events: none; transition: width 0.15s, height 0.15s; z-index: 20;
+  }
+  #character.station-mode { width: auto; height: 200px; image-rendering: auto; }
+  #badge {
+    position: absolute; background: rgba(0,0,0,0.7); color: #fff;
+    font-family: monospace; font-size: 11px; padding: 2px 8px;
+    border-radius: 10px; white-space: nowrap; opacity: 0;
+    transition: opacity 0.3s; pointer-events: none;
+    transform: translateX(-50%); z-index: 25;
+  }
+  #badge.show { opacity: 1; }
+  #status {
+    position: fixed; top: 12px; left: 14px;
+    background: rgba(0,0,0,0.65); color: #fff;
+    font-family: monospace; font-size: 12px; padding: 6px 12px;
+    border-radius: 10px; z-index: 99; pointer-events: none;
+    display: flex; align-items: center; gap: 8px;
+  }
+  #status-dot {
+    width: 8px; height: 8px; border-radius: 50%;
+    background: #555; flex-shrink: 0;
+  }
+  #status-dot.online  { background: #2ecc71; }
+  #status-dot.offline { background: #e74c3c; }
+  #status-text { opacity: 0.9; }
+  #status-caption {
+    position: fixed; top: 48px; left: 14px;
+    font-family: monospace; font-size: 11px; color: rgba(255,255,255,0.45);
+    pointer-events: none; z-index: 99;
+  }
+  #credit {
+    position: fixed; bottom: 12px; right: 14px;
+    font-family: monospace; font-size: 10px;
+    background: rgba(0,0,0,0.65); color: rgba(255,255,255,0.75);
+    padding: 4px 10px; border-radius: 8px;
+    z-index: 99; border: 1px solid rgba(255,255,255,0.1);
+  }
+  #credit a {
+    color: #fff; text-decoration: none;
+  }
+  #credit a:hover { text-decoration: underline; }
+</style>
+</head>
+<body>
+<div id="game">
+  <img id="bg" src="character/bg.png" alt="bg" />
+  <img id="character" src="character/f1.png" alt="character" />
+  <div id="badge"></div>
+</div>
+<div id="status">
+  <div id="status-dot"></div>
+  <span id="status-text">connecting…</span>
+</div>
+<div id="status-caption"></div>
+
+<script>
+const IMG_W = 2300, IMG_H = 1856;
+const SPEED = 5, FRAME_MS = 160, ARRIVE_DIST = 10, CHAR_SIZE = 96;
+
+const STATIONS = {
+  laptop:    { x: 0.885, y: 0.445, cx: 0.865, cy: 0.400,
+               label: 'Laptop', overlayClose: 'character/chair.png',
+               overlayAnim: ['character/chairCharacter1.png','character/chairCharacter2.png'],
+               overlayAnimMs: 300, overlayScale: 0.12, hideChar: true },
+  treadmill: { x: 0.865, y: 0.875, label: 'Treadmill',
+               anim: ['character/r1.png','character/r2.png'], animMs: 200 },
+  sofa:      { x: 0.500, y: 0.920, label: 'Sofa',
+               overlayAnim: ['character/nap1.png','character/nap2.png'],
+               overlayAnimMs: 400, overlayScale: 0.13, hideChar: true },
+  bookshelf: { x: 0.865, y: 0.255, label: 'Bookshelf', img: 'character/read.png' },
+  fridge:    { x: 0.280, y: 0.210, cx: 0.280, cy: 0.270, label: 'Fridge',
+               anim: ['character/b1.png','character/b2.png'], animMs: 250,
+               overlayClose: 'character/fridgeClosed.png',
+               overlayOpen: 'character/fridgeOpen.png', overlayScale: 0.30 },
+  board:     { x: 0.450, y: 0.250, label: 'Blackboard',
+               overlayAnim: ['character/chalk1.png','character/chalk2.png'],
+               overlayAnimMs: 300, overlayScale: 0.11, hideChar: true },
+  chess:     { x: 0.145, y: 0.760, label: '♟️  Chess',      img: 'character/chess.png' },
+  coffee:    { x: 0.500, y: 0.450, label: '☕ Coffee Break',
+               overlayAnim: ['character/coffee1.png','character/coffee2.png'],
+               overlayAnimMs: 350, overlayScale: 0.085, hideChar: true },
+};
+const STATION_KEYS = ['laptop','treadmill','sofa','bookshelf','fridge','board','chess','coffee'];
+
+// ── STATE → STATION MAP ───────────────────────────────────────────────────────
+const STATE_CAPTION = {
+  coding:   "I'm taking notes...",
+  thinking: "I'm thinking...",
+  reading:  "I'm researching...",
+  running:  "I'm running a command...",
+  waiting:  "Fetching something...",
+  idle:     "Taking a break...",
+  done:     "All done!",
+  fridge:   "Grabbing a tool...",
+  chess:    "Planning my move...",
+  coffee:   "Waiting for you...",
+  error:    "Something went wrong...",
+};
+
+const STATE_MAP = {
+  coding:    'laptop',
+  thinking:  'board',
+  reading:   'bookshelf',
+  running:   'treadmill',
+  waiting:   'coffee',
+  idle:      'coffee',
+  done:      'sofa',
+  fridge:    'fridge',
+  chess:     'chess',
+  coffee:    'coffee',
+  error:     'laptop',
+};
+
+const WALK = {
+  left:  ['character/l1.png','character/l2.png'],
+  right: ['character/r1.png','character/r2.png'],
+  up:    ['character/b1.png','character/b2.png'],
+  down:  ['character/f1.png','character/f2.png'],
+};
+
+// ── GRID ──────────────────────────────────────────────────────────────────────
+const GRID_COLS = 46, GRID_ROWS = 37;
+let grid = new Uint8Array(GRID_COLS * GRID_ROWS);
+const gIdx = (c,r) => r * GRID_COLS + c;
+
+async function loadGrid() {
+  try {
+    const res = await fetch('http://localhost:7788/grid', { cache: 'no-store' });
+    if (!res.ok) return;
+    const a = await res.json();
+    if (Array.isArray(a) && a.length === GRID_COLS * GRID_ROWS)
+      grid = new Uint8Array(a);
+  } catch(e) {}
+}
+
+function getRect() {
+  const vw = window.innerWidth, vh = window.innerHeight;
+  const scale = Math.min(vw/IMG_W, vh/IMG_H);
+  const w = IMG_W*scale, h = IMG_H*scale;
+  return { w, h, ox: (vw-w)/2, oy: (vh-h)/2 };
+}
+function stationPx(s) { const r=getRect(); return { x: r.ox+s.x*r.w, y: r.oy+s.y*r.h }; }
+function screenToCell(sx, sy) {
+  const r = getRect();
+  return {
+    col: Math.max(0, Math.min(GRID_COLS-1, Math.floor((sx-r.ox)/(r.w/GRID_COLS)))),
+    row: Math.max(0, Math.min(GRID_ROWS-1, Math.floor((sy-r.oy)/(r.h/GRID_ROWS))))
+  };
+}
+function cellCenter(col, row) {
+  const r = getRect();
+  return { x: r.ox+(col+0.5)*(r.w/GRID_COLS), y: r.oy+(row+0.5)*(r.h/GRID_ROWS) };
+}
+
+function nearestWalkable(col, row) {
+  if (grid[gIdx(col, row)] === 0) return {col, row};
+  let best=null, bd=Infinity;
+  for (let r=0;r<GRID_ROWS;r++) for (let c=0;c<GRID_COLS;c++) {
+    if (grid[gIdx(c,r)]===0) { const d=Math.hypot(c-col,r-row); if(d<bd){bd=d;best={col:c,row:r};} }
+  }
+  return best;
+}
+
+function astar(sx, sy, ex, ey) {
+  let end = nearestWalkable(...Object.values(screenToCell(ex, ey)));
+  if (!end) return null;
+  let start = nearestWalkable(...Object.values(screenToCell(sx, sy)));
+  if (!start) return null;
+  const sKey = gIdx(start.col,start.row), eKey = gIdx(end.col,end.row);
+  if (sKey===eKey) return [];
+  const open=[{col:start.col,row:start.row,key:sKey}];
+  const closed=new Set(), cf={}, g={[sKey]:0};
+  const f={[sKey]:Math.max(Math.abs(end.col-start.col),Math.abs(end.row-start.row))};
+  while (open.length) {
+    open.sort((a,b)=>(f[a.key]||Infinity)-(f[b.key]||Infinity));
+    const cur=open.shift();
+    if (cur.key===eKey) {
+      const keys=[]; let k=eKey;
+      while(k in cf){keys.unshift(k);k=cf[k];}
+      const pts=[{x:sx,y:sy}];
+      for (const k of keys) { const c=k%GRID_COLS,r=Math.floor(k/GRID_COLS); pts.push(cellCenter(c,r)); }
+      pts.push({x:ex,y:ey});
+      return pts;
+    }
+    closed.add(cur.key);
+    for (const [dc,dr] of [[-1,0],[1,0],[0,-1],[0,1],[-1,-1],[1,-1],[-1,1],[1,1]]) {
+      const nc=cur.col+dc, nr=cur.row+dr;
+      if (nc<0||nc>=GRID_COLS||nr<0||nr>=GRID_ROWS) continue;
+      if (grid[gIdx(nc,nr)]===1) continue;
+      if (dc!==0&&dr!==0&&(grid[gIdx(cur.col+dc,cur.row)]===1||grid[gIdx(cur.col,cur.row+dr)]===1)) continue;
+      const nk=gIdx(nc,nr); if(closed.has(nk)) continue;
+      const tg=(g[cur.key]||0)+(dc!==0&&dr!==0?1.414:1);
+      if (tg<(g[nk]??Infinity)) {
+        cf[nk]=cur.key; g[nk]=tg;
+        f[nk]=tg+Math.max(Math.abs(end.col-nc),Math.abs(end.row-nr));
+        if (!open.find(n=>n.key===nk)) open.push({col:nc,row:nr,key:nk});
+      }
+    }
+  }
+  return null;
+}
+
+// ── OVERLAYS ──────────────────────────────────────────────────────────────────
+const overlayCanvases={}, overlayCurSrc={}, overlayAnimTimers={};
+function getOverlayCanvas(key) {
+  if (!overlayCanvases[key]) {
+    const c=document.createElement('canvas');
+    c.style.cssText='position:absolute;transform:translate(-50%,-50%);image-rendering:pixelated;pointer-events:none;z-index:10;';
+    document.getElementById('game').appendChild(c);
+    overlayCanvases[key]=c;
+  }
+  return overlayCanvases[key];
+}
+function drawOverlay(key, src) {
+  overlayCurSrc[key]=src;
+  const s=STATIONS[key], r=getRect(), p=stationPx(s);
+  const canvas=getOverlayCanvas(key);
+  const dw=Math.round(r.w*(s.overlayScale||0.20));
+  const img=new Image();
+  img.onload=function(){
+    const dh=Math.round(dw*img.naturalHeight/img.naturalWidth);
+    canvas.width=dw; canvas.height=dh;
+    canvas.style.width=dw+'px'; canvas.style.height=dh+'px';
+    canvas.style.left=p.x+'px'; canvas.style.top=p.y+'px';
+    const ctx=canvas.getContext('2d');
+    ctx.clearRect(0,0,dw,dh); ctx.drawImage(img,0,0,dw,dh);
+  };
+  img.src=src;
+}
+function startOverlayAnim(key,frames,ms){
+  stopOverlayAnim(key); let f=0; drawOverlay(key,frames[0]);
+  overlayAnimTimers[key]=setInterval(()=>{f=(f+1)%frames.length;drawOverlay(key,frames[f]);},ms);
+}
+function stopOverlayAnim(key){
+  if(overlayAnimTimers[key]){clearInterval(overlayAnimTimers[key]);delete overlayAnimTimers[key];}
+}
+function positionAllOverlays(){
+  Object.entries(STATIONS).forEach(([key,s])=>{ if(s.overlayClose) drawOverlay(key,overlayCurSrc[key]||s.overlayClose); });
+}
+
+// ── STATE ─────────────────────────────────────────────────────────────────────
+const char=document.getElementById('character'), badge=document.getElementById('badge');
+let x, y, direction='down', frameIndex=0, lastFrameTs=0;
+let keys={}, currentPath=[], pathIdx=0, pendingStation=null, atStation=null;
+let activityImages={}, stationAnimInterval=null;
+let debugMode=false, editMode=false, editCanvas=null, painting=false, paintValue=0;
+
+Object.entries(STATIONS).forEach(([key,s])=>{
+  if(!s.img)return; const img=new Image();
+  img.onload=()=>{activityImages[key]=s.img;}; img.onerror=()=>{}; img.src=s.img;
+});
+
+function saveGrid(){
+  fetch('http://localhost:7788/grid', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(Array.from(grid))
+  }).catch(()=>{});
+}
+function getEditCanvas(){
+  if(!editCanvas){
+    editCanvas=document.createElement('canvas');
+    editCanvas.style.cssText='position:absolute;top:0;left:0;pointer-events:none;z-index:50;';
+    document.getElementById('game').appendChild(editCanvas);
+  }
+  return editCanvas;
+}
+function drawDebugGrid(){
+  const c=getEditCanvas();
+  if(!debugMode&&!editMode){ c.style.display='none'; return; }
+  const vw=window.innerWidth, vh=window.innerHeight;
+  c.width=vw; c.height=vh; c.style.display='block';
+  const ctx=c.getContext('2d');
+  ctx.clearRect(0,0,vw,vh);
+  const r=getRect(), cw=r.w/GRID_COLS, ch=r.h/GRID_ROWS;
+  for(let row=0;row<GRID_ROWS;row++) for(let col=0;col<GRID_COLS;col++){
+    const isWall=grid[gIdx(col,row)]===1;
+    if(isWall){ ctx.fillStyle='rgba(255,0,0,0.45)'; ctx.fillRect(r.ox+col*cw,r.oy+row*ch,cw,ch); }
+    if(debugMode){ ctx.strokeStyle='rgba(255,255,255,0.12)'; ctx.strokeRect(r.ox+col*cw,r.oy+row*ch,cw,ch); }
+  }
+  if(editMode){
+    ctx.fillStyle='rgba(0,0,0,0.55)'; ctx.fillRect(0,vh-28,vw,28);
+    ctx.fillStyle='#ffe066'; ctx.font='bold 12px monospace';
+    ctx.fillText('EDIT MODE — click/drag: paint walls | right-click/drag: erase | E: exit | D: toggle grid',12,vh-10);
+  }
+}
+
+document.getElementById('bg').onload=async function(){
+  const r=getRect(); x=r.ox+r.w/2; y=r.oy+r.h/2;
+  await loadGrid();
+  positionAllOverlays(); updateChar(); requestAnimationFrame(loop);
+};
+window.addEventListener('resize',()=>{ positionAllOverlays(); drawDebugGrid(); });
+
+// ── INPUT ─────────────────────────────────────────────────────────────────────
+document.addEventListener('keydown',e=>{
+  if(['ArrowLeft','ArrowRight','ArrowUp','ArrowDown'].includes(e.key)){
+    e.preventDefault(); keys[e.key]=true;
+    cancelStation(); currentPath=[]; pathIdx=0; pendingStation=null;
+  }
+  if(e.key>='1'&&e.key<='8'){const k=STATION_KEYS[parseInt(e.key)-1];if(k)goToStation(k);}
+  if(e.key==='d'||e.key==='D'){debugMode=!debugMode;drawDebugGrid();}
+  if(e.key==='e'||e.key==='E'){editMode=!editMode;document.getElementById('game').style.cursor=editMode?'crosshair':'default';drawDebugGrid();}
+});
+document.addEventListener('keyup',e=>{keys[e.key]=false;});
+
+// ── WALL EDITOR ───────────────────────────────────────────────────────────────
+document.addEventListener('mousedown',e=>{
+  if(!editMode)return;
+  e.preventDefault();
+  const {col,row}=screenToCell(e.clientX,e.clientY);
+  paintValue=e.button===2?0:(grid[gIdx(col,row)]===1?0:1);
+  grid[gIdx(col,row)]=paintValue;
+  painting=true; saveGrid(); drawDebugGrid();
+});
+document.addEventListener('mousemove',e=>{
+  if(!editMode||!painting)return;
+  const {col,row}=screenToCell(e.clientX,e.clientY);
+  grid[gIdx(col,row)]=paintValue;
+  saveGrid(); drawDebugGrid();
+});
+document.addEventListener('mouseup',()=>{painting=false;});
+document.addEventListener('contextmenu',e=>{if(editMode)e.preventDefault();});
+
+// ── STATIONS ──────────────────────────────────────────────────────────────────
+function goToStation(key){
+  cancelStation();
+  const s=STATIONS[key], r=getRect();
+  const cx=s.cx??s.x, cy=s.cy??s.y;
+  const dx=r.ox+cx*r.w, dy=r.oy+cy*r.h;
+  const path=astar(x,y,dx,dy);
+  if(!path) return;  // no walkable path — stay put
+  currentPath=path.length>0?path:[{x:dx,y:dy}];
+  pathIdx=0; pendingStation=key;
+}
+
+function cancelStation(){
+  if(!atStation)return;
+  const prev=STATIONS[atStation];
+  stopOverlayAnim(atStation);
+  if(prev.overlayClose){ drawOverlay(atStation,prev.overlayClose); }
+  else if(overlayCanvases[atStation]){ overlayCanvases[atStation].style.display="none"; }
+  atStation=null; badge.classList.remove('show');
+  char.classList.remove('station-mode');
+  char.style.width='96px'; char.style.height='96px'; char.style.opacity='1';
+  char.src=WALK[direction][0];
+  if(stationAnimInterval){clearInterval(stationAnimInterval);stationAnimInterval=null;}
+}
+
+function arriveAtStation(key){
+  atStation=key; pendingStation=null; currentPath=[];
+  const s=STATIONS[key];
+  badge.textContent=s.label; badge.classList.add('show');
+  const oc=getOverlayCanvas(key); oc.style.display="block";
+  if(s.overlayAnim) startOverlayAnim(key,s.overlayAnim,s.overlayAnimMs||300);
+  else if(s.overlayOpen) drawOverlay(key,s.overlayOpen);
+  if(s.hideChar){ char.style.opacity='0'; }
+  else {
+    if(s.large){char.classList.add('station-mode');char.style.width='auto';char.style.height='200px';}
+    if(s.anim){let f=0;char.src=s.anim[0];stationAnimInterval=setInterval(()=>{f=(f+1)%s.anim.length;char.src=s.anim[f];},s.animMs||300);}
+    else if(activityImages[key]) char.src=activityImages[key];
+  }
+}
+
+// ── LOOP ──────────────────────────────────────────────────────────────────────
+function getArrowDir(){
+  if(keys['ArrowLeft'])return'left'; if(keys['ArrowRight'])return'right';
+  if(keys['ArrowUp'])return'up';     if(keys['ArrowDown'])return'down';
+  return null;
+}
+
+function loop(ts){
+  const r=getRect();
+  const arrowDir=getArrowDir();
+  if(arrowDir){
+    direction=arrowDir;
+    if(arrowDir==='left')x-=SPEED; if(arrowDir==='right')x+=SPEED;
+    if(arrowDir==='up')y-=SPEED;   if(arrowDir==='down')y+=SPEED;
+    x=Math.max(r.ox,Math.min(x,r.ox+r.w)); y=Math.max(r.oy,Math.min(y,r.oy+r.h));
+    animateWalk(ts);
+  } else if(currentPath.length>0&&pathIdx<currentPath.length){
+    const wp=currentPath[pathIdx];
+    const dx=wp.x-x, dy=wp.y-y, dist=Math.hypot(dx,dy);
+    if(dist<ARRIVE_DIST){
+      x=wp.x; y=wp.y; pathIdx++;
+      if(pathIdx>=currentPath.length&&pendingStation) arriveAtStation(pendingStation);
+    } else {
+      direction=Math.abs(dx)>=Math.abs(dy)?(dx>0?'right':'left'):(dy>0?'down':'up');
+      const step=Math.min(SPEED,dist); x+=(dx/dist)*step; y+=(dy/dist)*step;
+      animateWalk(ts);
+    }
+  }
+  updateChar(); requestAnimationFrame(loop);
+}
+
+function animateWalk(ts){
+  if(atStation)return;
+  if(ts-lastFrameTs>FRAME_MS){frameIndex=(frameIndex+1)%2;lastFrameTs=ts;}
+  char.src=WALK[direction][frameIndex];
+}
+function updateChar(){
+  char.style.left=x+'px'; char.style.top=y+'px';
+  badge.style.left=x+'px'; badge.style.top=(y+CHAR_SIZE/2+6)+'px';
+}
+
+// ── POLLING ───────────────────────────────────────────────────────────────────
+const statusDot     = document.getElementById('status-dot');
+const statusText    = document.getElementById('status-text');
+const statusCaption = document.getElementById('status-caption');
+let lastState = null;
+
+function setStatus(online, text) {
+  statusDot.className = online ? 'online' : 'offline';
+  statusText.textContent = text;
+}
+
+// ── LOG-BASED POLLING ─────────────────────────────────────────────────────────
+let lastLogId = -1;
+let stateQueue = [];  // buffered entries waiting to be processed
+
+async function poll() {
+  try {
+    const res = await fetch(`http://localhost:7788/log?since=${lastLogId}`, { cache: 'no-store' });
+    if (!res.ok) throw new Error('bad status');
+    const entries = await res.json();
+    // Day reset: server returned entries starting from 0 but our lastLogId is ahead
+    if (entries.length > 0 && entries[0].id === 0 && lastLogId > 0) {
+      stateQueue = [];  // discard stale queue from previous day
+      lastLogId = -1;
+    }
+    if (entries.length > 0) {
+      entries.forEach(e => stateQueue.push(e));
+      lastLogId = entries[entries.length - 1].id;
+      setStatus(true, `queued ${stateQueue.length}`);
+    } else {
+      setStatus(true, stateQueue.length ? `replaying ${stateQueue.length}` : lastState || 'idle');
+    }
+  } catch(e) {
+    setStatus(false, 'server offline');
+  }
+}
+
+function isWalking() {
+  return pendingStation !== null || (currentPath.length > 0 && pathIdx < currentPath.length);
+}
+
+function processQueue() {
+  if (stateQueue.length === 0) return;
+  if (isWalking()) return;  // wait until character arrives before next station
+  const entry = stateQueue.shift();
+  const state = entry.state || 'idle';
+  const station = STATE_MAP[state];
+  lastState = state;
+  setStatus(true, state + (station ? ' → ' + station : '') + (stateQueue.length ? ` (+${stateQueue.length})` : ''));
+  statusCaption.textContent = STATE_CAPTION[state] || '';
+  if (station) goToStation(station);
+}
+
+poll();
+setInterval(poll, 1000);       // fetch new log entries every 1 s
+setInterval(processQueue, 1500); // drain queue: one state every 1.5 s
+</script>
+<div id="credit">© <a href="https://www.linkedin.com/in/iamrohanvidhate/" target="_blank">Rohan Vidhate</a></div>
+</body>
+</html>
