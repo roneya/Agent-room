@@ -49,11 +49,18 @@
     background: rgba(0,0,0,0.65); color: rgba(255,255,255,0.75);
     padding: 4px 10px; border-radius: 8px;
     z-index: 99; border: 1px solid rgba(255,255,255,0.1);
+    cursor: pointer; transition: transform 0.15s ease, background 0.15s ease, color 0.15s ease;
+  }
+  #credit:hover {
+    transform: translateY(-2px) scale(1.04);
+    background: rgba(255,255,255,0.12);
+    color: #fff;
   }
   #credit a {
-    color: #fff; text-decoration: none;
+    color: #fff; text-decoration: none; display: block;
+    position: absolute; inset: 0;
   }
-  #credit a:hover { text-decoration: underline; }
+  #credit a:hover { text-decoration: none; }
 </style>
 </head>
 <body>
@@ -475,6 +482,6 @@ poll();
 setInterval(poll, 1000);       // fetch new log entries every 1 s
 setInterval(processQueue, 1500); // drain queue: one state every 1.5 s
 </script>
-<div id="credit">© <a href="https://www.linkedin.com/in/iamrohanvidhate/" target="_blank">Rohan Vidhate</a></div>
+<div id="credit" onclick="window.open('https://www.linkedin.com/in/iamrohanvidhate/','_blank')">© Rohan Vidhate</div>
 </body>
 </html>
