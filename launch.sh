@@ -12,5 +12,5 @@ else
   echo "agent_server.py already running on :7788"
 fi
 
-# Open index.html in default browser (only if not already open)
-open "$PROJECT_DIR/index.html"
+# Open index.html in default browser
+open "file://$PROJECT_DIR/index.html"

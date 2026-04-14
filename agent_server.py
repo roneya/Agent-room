@@ -50,6 +50,10 @@ class Handler(BaseHTTPRequestHandler):
             qs = parse_qs(parsed.query)
             since = int(qs.get('since', ['-1'])[0])
             entries = [e for e in log if e.get('id', 0) > since]
+            # Day reset: client counter is ahead of current log (IDs restarted from 0)
+            # Return all entries so the browser's reset detection can trigger
+            if not entries and since > 0 and log:
+                entries = log
             body = json.dumps(entries).encode()
         elif parsed.path == '/log/clear':
             try:

@@ -73,79 +73,31 @@ room/
 ├── hook.py             # Hook script — maps tools to states
 ├── agent_server.py     # Local HTTP server (port 7788)
 ├── launch.sh           # Auto-starts server + opens browser
-├── agent_log.json      # Activity log (auto-generated)
+├── setup.sh            # 1-click setup — run once after cloning
+├── agent_log.json      # Activity log (auto-generated, cleared daily)
 ├── agent_grid.json     # Wall layout (saved from editor)
 └── character/          # All sprites and background image
 ```
 
 ---
 
-## How to Set It Up
-
-### 1. Clone the repo
+## Quick Setup (1-click)
 
 ```bash
 git clone https://github.com/roneya/Agent-room.git
 cd Agent-room
+bash setup.sh
 ```
 
-### 2. Add the hooks to Claude Code settings
+That's it. `setup.sh` will:
+- Detect where you cloned the repo
+- Write `.claude/settings.local.json` with the correct paths for your machine
+- Start `agent_server.py` on `http://localhost:7788`
+- Open `index.html` in your browser
 
-This is the **most important step**. The room only works if Claude Code knows to call `hook.py` on every tool use.
+From then on, every time you open Claude Code in this folder the hooks auto-start everything.
 
-Open or create `.claude/settings.local.json` inside your project folder and add:
-
-```json
-{
-  "hooks": {
-    "SessionStart": [
-      {
-        "hooks": [
-          {
-            "type": "command",
-            "command": "bash /YOUR/PATH/TO/room/launch.sh"
-          }
-        ]
-      }
-    ],
-    "Stop": [
-      {
-        "hooks": [
-          {
-            "type": "command",
-            "command": "python3 /YOUR/PATH/TO/room/hook.py --state done"
-          }
-        ]
-      }
-    ],
-    "Notification": [
-      {
-        "hooks": [
-          {
-            "type": "command",
-            "command": "python3 /YOUR/PATH/TO/room/hook.py --state waiting"
-          }
-        ]
-      }
-    ],
-    "PreToolUse": [
-      {
-        "matcher": "",
-        "hooks": [
-          {
-            "type": "command",
-            "command": "python3 /YOUR/PATH/TO/room/hook.py"
-          }
-        ]
-      }
-    ]
-  }
-}
-```
-
-> Replace `/YOUR/PATH/TO/room/` with the actual absolute path where you cloned the repo.
-
-#### What each hook does
+#### What the hooks do
 
 | Hook | When it fires | What it does |
 |---|---|---|
@@ -154,14 +106,7 @@ Open or create `.claude/settings.local.json` inside your project folder and add:
 | `Stop` | When the session ends | Sends character to sofa (`done`) |
 | `Notification` | When Claude finishes and notifies | Sends character to coffee (`waiting`) |
 
-> **Note:** `settings.local.json` is gitignored by Claude Code by default — each user sets their own absolute paths locally.
-
-### 3. Start Claude Code
-
-Open Claude Code in any project. The room will:
-- Auto-start the server on `http://localhost:7788`
-- Open `index.html` in your browser
-- Start animating immediately as Claude works
+> `settings.local.json` is machine-specific and gitignored — `setup.sh` generates it fresh for each user.
 
 ---
 
@@ -203,7 +148,7 @@ So if you open the GitHub Pages link on your Mac while `agent_server.py` is runn
 
 If someone else opens the same link on their machine, they'll see the room frozen with an **offline** status — because their `localhost:7788` has nothing running.
 
-**This means:** GitHub Pages is your permanent UI host. Your local machine is the engine. On session start, `launch.sh` automatically opens the GitHub Pages URL in your browser and starts the local server in the background — so everything just works.
+**This means:** GitHub Pages is a shareable preview. Your local machine is the engine. By default, `launch.sh` opens your local `index.html` so it works offline and without any GitHub dependency.
 
 ---
 
