@@ -12,7 +12,8 @@ from http.server import HTTPServer, BaseHTTPRequestHandler
 from urllib.parse import urlparse, parse_qs
 
 LOG_FILE  = os.path.join(os.path.dirname(__file__), 'agent_log.json')
-GRID_FILE = os.path.join(os.path.dirname(__file__), 'agent_grid.json')
+GRID_FILE  = os.path.join(os.path.dirname(__file__), 'agent_grid.json')
+TOKEN_FILE = os.path.join(os.path.dirname(__file__), 'token_state.json')
 PORT = 7788
 
 
@@ -62,6 +63,12 @@ class Handler(BaseHTTPRequestHandler):
             except Exception:
                 pass
             body = json.dumps({'ok': True}).encode()
+        elif parsed.path == '/tokens':
+            try:
+                with open(TOKEN_FILE) as f:
+                    body = f.read().encode()
+            except FileNotFoundError:
+                body = json.dumps({'pct_remaining': 100, 'pct_used': 0}).encode()
         elif parsed.path == '/grid':
             try:
                 with open(GRID_FILE) as f:

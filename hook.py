@@ -6,6 +6,9 @@ so agent_server.py can serve the full history to the room tracker.
 """
 import json, sys, os, time
 
+TOKEN_FILE    = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'token_state.json')
+CONTEXT_LIMIT = 200_000  # claude-sonnet context window
+
 # Log file lives next to this hook in the project folder
 LOG_FILE = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'agent_log.json')
 
@@ -81,6 +84,39 @@ def resolve_state(tool):
             return state
     return 'coding'  # default
 
+def update_token_state(transcript_path):
+    """Read last assistant message usage from transcript and save token state."""
+    try:
+        usage = None
+        with open(transcript_path, 'r') as f:
+            for line in f:
+                line = line.strip()
+                if not line:
+                    continue
+                try:
+                    obj = json.loads(line)
+                    if obj.get('type') == 'assistant':
+                        u = obj.get('message', {}).get('usage')
+                        if u:
+                            usage = u
+                except Exception:
+                    pass
+        if not usage:
+            return
+        used = (usage.get('input_tokens', 0)
+              + usage.get('cache_creation_input_tokens', 0)
+              + usage.get('cache_read_input_tokens', 0))
+        pct_used      = round(used / CONTEXT_LIMIT * 100, 1)
+        pct_remaining = round(100 - pct_used, 1)
+        state = {'used': used, 'limit': CONTEXT_LIMIT,
+                 'pct_used': pct_used, 'pct_remaining': pct_remaining,
+                 'ts': time.time()}
+        with open(TOKEN_FILE, 'w') as f:
+            json.dump(state, f)
+    except Exception:
+        pass
+
+
 def main():
     # Support: python3 hook.py --state done  (used by Stop hook)
     if len(sys.argv) == 3 and sys.argv[1] == '--state':
@@ -92,6 +128,10 @@ def main():
         tool = data.get('tool_name', '')
         state = resolve_state(tool)
         append_log(state, tool)
+        # Extract real token usage from transcript
+        transcript = data.get('transcript_path', '')
+        if transcript and os.path.exists(transcript):
+            update_token_state(transcript)
     except Exception:
         append_log('idle')
 
