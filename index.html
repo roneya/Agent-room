@@ -43,6 +43,27 @@
     font-family: monospace; font-size: 11px; color: rgba(255,255,255,0.45);
     pointer-events: none; z-index: 99;
   }
+  #token-bar-wrap {
+    position: fixed; left: 8px; top: 50%; transform: translateY(-50%);
+    display: flex; flex-direction: column; align-items: center; gap: 5px;
+    z-index: 99; pointer-events: none;
+  }
+  #token-bar-track {
+    width: 8px; height: 160px; background: rgba(255,255,255,0.1);
+    border-radius: 4px; overflow: hidden;
+    display: flex; flex-direction: column; justify-content: flex-end;
+  }
+  #token-bar-fill {
+    width: 100%; height: 100%;
+    background: linear-gradient(to top, #e74c3c, #f39c12, #2ecc71);
+    border-radius: 4px;
+    transition: height 0.6s ease;
+  }
+  #token-bar-label {
+    font-family: monospace; font-size: 9px;
+    color: rgba(255,255,255,0.4); writing-mode: vertical-rl;
+    text-orientation: mixed; transform: rotate(180deg); letter-spacing: 1px;
+  }
   #credit {
     position: fixed; bottom: 12px; right: 14px;
     font-family: monospace; font-size: 10px;
@@ -68,6 +89,10 @@
   <img id="bg" src="character/bg.png" alt="bg" />
   <img id="character" src="character/f1.png" alt="character" />
   <div id="badge"></div>
+</div>
+<div id="token-bar-wrap">
+  <div id="token-bar-track"><div id="token-bar-fill"></div></div>
+  <div id="token-bar-label">context</div>
 </div>
 <div id="status">
   <div id="status-dot"></div>
@@ -453,6 +478,7 @@ async function poll() {
     if (entries.length > 0) {
       entries.forEach(e => stateQueue.push(e));
       lastLogId = entries[entries.length - 1].id;
+      updateTokenBar();
       setStatus(true, `queued ${stateQueue.length}`);
     } else {
       setStatus(true, stateQueue.length ? `replaying ${stateQueue.length}` : lastState || 'idle');
@@ -476,6 +502,14 @@ function processQueue() {
   setStatus(true, state + (station ? ' → ' + station : '') + (stateQueue.length ? ` (+${stateQueue.length})` : ''));
   statusCaption.textContent = STATE_CAPTION[state] || '';
   if (station) goToStation(station);
+}
+
+const TOKEN_MAX = 200;
+const tokenFill = document.getElementById('token-bar-fill');
+function updateTokenBar() {
+  const used = Math.min(lastLogId + 1, TOKEN_MAX);
+  const remaining = 1 - used / TOKEN_MAX;
+  tokenFill.style.height = (remaining * 100) + '%';
 }
 
 poll();

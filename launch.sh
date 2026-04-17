@@ -12,5 +12,5 @@ else
   echo "agent_server.py already running on :7788"
 fi
 
-# Open index.html in default browser
-open "file://$PROJECT_DIR/index.html"
+# Open GitHub Pages — index.html is hosted there, API fetches from localhost:7788
+open "https://roneya.github.io/Agent-room/"

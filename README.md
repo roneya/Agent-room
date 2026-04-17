@@ -93,7 +93,7 @@ That's it. `setup.sh` will:
 - Detect where you cloned the repo
 - Write `.claude/settings.local.json` with the correct paths for your machine
 - Start `agent_server.py` on `http://localhost:7788`
-- Open `index.html` in your browser
+- Open **[https://roneya.github.io/Agent-room/](https://roneya.github.io/Agent-room/)** in your browser
 
 From then on, every time you open Claude Code in this folder the hooks auto-start everything.
 
@@ -148,7 +148,7 @@ So if you open the GitHub Pages link on your Mac while `agent_server.py` is runn
 
 If someone else opens the same link on their machine, they'll see the room frozen with an **offline** status — because their `localhost:7788` has nothing running.
 
-**This means:** GitHub Pages is a shareable preview. Your local machine is the engine. By default, `launch.sh` opens your local `index.html` so it works offline and without any GitHub dependency.
+**This means:** GitHub Pages is the UI. Your local machine is the engine. `launch.sh` opens the GitHub Pages URL directly — so you always get the latest version of the room without needing to open a local file.
 
 ---
 
