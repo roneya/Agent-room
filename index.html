@@ -45,11 +45,15 @@
   }
   #token-bar-wrap {
     position: fixed; left: 8px; top: 50%; transform: translateY(-50%);
-    display: flex; flex-direction: column; align-items: center; gap: 5px;
+    display: flex; flex-direction: column; align-items: center; gap: 6px;
     z-index: 99; pointer-events: none;
   }
+  #token-pct {
+    font-family: monospace; font-size: 9px; color: rgba(255,255,255,0.7);
+    letter-spacing: 0.5px;
+  }
   #token-bar-track {
-    width: 8px; height: 160px; background: rgba(255,255,255,0.1);
+    width: 8px; height: 140px; background: rgba(255,255,255,0.1);
     border-radius: 4px; overflow: hidden;
     display: flex; flex-direction: column; justify-content: flex-end;
   }
@@ -59,10 +63,10 @@
     border-radius: 4px;
     transition: height 0.6s ease;
   }
-  #token-bar-label {
-    font-family: monospace; font-size: 9px;
-    color: rgba(255,255,255,0.4); writing-mode: vertical-rl;
-    text-orientation: mixed; transform: rotate(180deg); letter-spacing: 1px;
+  #token-reset {
+    font-family: monospace; font-size: 9px; color: rgba(255,255,255,0.35);
+    writing-mode: vertical-rl; text-orientation: mixed;
+    transform: rotate(180deg); letter-spacing: 1px;
   }
   #credit {
     position: fixed; bottom: 12px; right: 14px;
@@ -91,8 +95,9 @@
   <div id="badge"></div>
 </div>
 <div id="token-bar-wrap">
+  <div id="token-pct">100%</div>
   <div id="token-bar-track"><div id="token-bar-fill"></div></div>
-  <div id="token-bar-label">context</div>
+  <div id="token-reset">reset</div>
 </div>
 <div id="status">
   <div id="status-dot"></div>
@@ -505,12 +510,29 @@ function processQueue() {
 }
 
 const TOKEN_MAX = 200;
-const tokenFill = document.getElementById('token-bar-fill');
+const tokenFill  = document.getElementById('token-bar-fill');
+const tokenPct   = document.getElementById('token-pct');
+const tokenReset = document.getElementById('token-reset');
+
 function updateTokenBar() {
-  const used = Math.min(lastLogId + 1, TOKEN_MAX);
+  const used      = Math.min(lastLogId + 1, TOKEN_MAX);
   const remaining = 1 - used / TOKEN_MAX;
-  tokenFill.style.height = (remaining * 100) + '%';
+  const pct       = Math.round(remaining * 100);
+  tokenFill.style.height = pct + '%';
+  tokenPct.textContent   = pct + '%';
 }
+
+function updateResetTimer() {
+  const now  = new Date();
+  const midnight = new Date(now);
+  midnight.setHours(24, 0, 0, 0);
+  const diff = midnight - now;
+  const h = String(Math.floor(diff / 3600000)).padStart(2,'0');
+  const m = String(Math.floor((diff % 3600000) / 60000)).padStart(2,'0');
+  tokenReset.textContent = h + ':' + m;
+}
+updateResetTimer();
+setInterval(updateResetTimer, 30000);
 
 poll();
 setInterval(poll, 1000);       // fetch new log entries every 1 s
