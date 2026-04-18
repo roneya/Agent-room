@@ -512,6 +512,8 @@ const tokenFill  = document.getElementById('token-bar-fill');
 const tokenPct   = document.getElementById('token-pct');
 const tokenReset = document.getElementById('token-reset');
 
+let sessionStartMs = null;
+
 async function updateTokenBar() {
   try {
     const res = await fetch('http://localhost:7788/tokens', { cache: 'no-store' });
@@ -520,14 +522,15 @@ async function updateTokenBar() {
     const pct = Math.max(0, Math.min(100, Math.round(data.pct_remaining)));
     tokenFill.style.height = pct + '%';
     tokenPct.textContent   = pct + '% left';
+    if (data.ts) sessionStartMs = data.ts * 1000;
   } catch(e) {}
 }
 
 function updateResetTimer() {
-  const now      = new Date();
-  const midnight = new Date(now);
-  midnight.setHours(24, 0, 0, 0);
-  const diff = midnight - now;
+  if (!sessionStartMs) { tokenReset.textContent = '--:--'; return; }
+  const resetAt = sessionStartMs + 5 * 60 * 60 * 1000;
+  const diff    = resetAt - Date.now();
+  if (diff <= 0) { tokenReset.textContent = '00:00'; return; }
   const h = String(Math.floor(diff / 3600000)).padStart(2,'0');
   const m = String(Math.floor((diff % 3600000) / 60000)).padStart(2,'0');
   tokenReset.textContent = h + ':' + m;

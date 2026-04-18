@@ -120,6 +120,13 @@ def update_token_state(transcript_path):
 def main():
     # Support: python3 hook.py --state done  (used by Stop hook)
     if len(sys.argv) == 3 and sys.argv[1] == '--state':
+        try:
+            data = json.load(sys.stdin)
+            transcript = data.get('transcript_path', '')
+            if transcript and os.path.exists(transcript):
+                update_token_state(transcript)
+        except Exception:
+            pass
         append_log(sys.argv[2], sys.argv[2])
         return  # no stdout needed for Stop hook
 
