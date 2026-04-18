@@ -64,9 +64,8 @@
     transition: height 0.6s ease;
   }
   #token-reset {
-    font-family: monospace; font-size: 9px; color: rgba(255,255,255,0.35);
-    writing-mode: vertical-rl; text-orientation: mixed;
-    transform: rotate(180deg); letter-spacing: 1px;
+    font-family: monospace; font-size: 9px; color: rgba(255,255,255,0.7);
+    letter-spacing: 0.5px; text-align: center;
   }
   #credit {
     position: fixed; bottom: 12px; right: 14px;
@@ -527,13 +526,12 @@ async function updateTokenBar() {
 }
 
 function updateResetTimer() {
-  if (!sessionStartMs) { tokenReset.textContent = '--:--'; return; }
+  if (!sessionStartMs) { tokenReset.textContent = '--h'; return; }
   const resetAt = sessionStartMs + 5 * 60 * 60 * 1000;
   const diff    = resetAt - Date.now();
-  if (diff <= 0) { tokenReset.textContent = '00:00'; return; }
-  const h = String(Math.floor(diff / 3600000)).padStart(2,'0');
-  const m = String(Math.floor((diff % 3600000) / 60000)).padStart(2,'0');
-  tokenReset.textContent = h + ':' + m;
+  if (diff <= 0) { tokenReset.textContent = '0h'; return; }
+  const hrs = (diff / 3600000).toFixed(1);
+  tokenReset.textContent = hrs + 'h';
 }
 updateTokenBar();
 updateResetTimer();
